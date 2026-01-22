@@ -1,10 +1,31 @@
+using Azure;
+using Azure.AI.ContentSafety;
 using DemoContentSafety.Components;
+using DemoContentSafety.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Azure Content Safety Client
+var endpoint = builder.Configuration["AzureContentSafety:Endpoint"] ?? string.Empty;
+var key = builder.Configuration["AzureContentSafety:Key"] ?? string.Empty;
+
+if (!string.IsNullOrEmpty(endpoint) && !string.IsNullOrEmpty(key))
+{
+    builder.Services.AddSingleton(new ContentSafetyClient(
+        new Uri(endpoint),
+        new AzureKeyCredential(key)
+    ));
+    builder.Services.AddScoped<ITeamNameSafetyService, TeamNameSafetyService>();
+}
+else
+{
+    // Fallback: Content Safety未設定の場合は NoOp サービスを使用
+    builder.Services.AddScoped<ITeamNameSafetyService, NoOpTeamNameSafetyService>();
+}
 
 var app = builder.Build();
 
