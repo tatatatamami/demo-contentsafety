@@ -1,10 +1,37 @@
+using Azure;
+using Azure.AI.ContentSafety;
 using DemoContentSafety.Components;
+using DemoContentSafety.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Azure Content Safety Client
+var endpoint = builder.Configuration["AzureContentSafety:Endpoint"] ?? string.Empty;
+var key = builder.Configuration["AzureContentSafety:Key"] ?? string.Empty;
+
+if (!string.IsNullOrEmpty(endpoint) && !string.IsNullOrEmpty(key))
+{
+    builder.Services.AddSingleton(new ContentSafetyClient(
+        new Uri(endpoint),
+        new AzureKeyCredential(key)
+    ));
+    builder.Services.AddScoped<TeamNameSafetyService>();
+}
+else
+{
+    // Fallback: Content Safety未設定の場合でも動作させる（常に通過）
+    builder.Services.AddScoped<TeamNameSafetyService>(sp =>
+    {
+        var logger = sp.GetRequiredService<ILogger<TeamNameSafetyService>>();
+        logger.LogWarning("Azure Content Safety is not configured. Validation will be bypassed.");
+        // nullを渡すことでバリデーションをスキップさせる実装にする
+        return new TeamNameSafetyService(null!, logger);
+    });
+}
 
 var app = builder.Build();
 

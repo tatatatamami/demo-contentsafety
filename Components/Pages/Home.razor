@@ -1,5 +1,7 @@
 ﻿@page "/"
 @using DemoContentSafety.Models
+@using DemoContentSafety.Services
+@inject TeamNameSafetyService SafetyService
 @rendermode InteractiveServer
 
 <PageTitle>チーム名登録</PageTitle>
@@ -28,6 +30,12 @@
             {
                 <div class="alert @messageClass mt-3" role="alert">
                     @message
+                    @if (!string.IsNullOrEmpty(categoriesSummary))
+                    {
+                        <div class="mt-2">
+                            <small><strong>詳細:</strong> @categoriesSummary</small>
+                        </div>
+                    }
                 </div>
             }
 
@@ -52,15 +60,30 @@
     private List<string> registeredTeams = new();
     private string message = string.Empty;
     private string messageClass = string.Empty;
+    private string categoriesSummary = string.Empty;
 
-    private void HandleValidSubmit()
+    private async Task HandleValidSubmit()
     {
-        // 登録成功
-        registeredTeams.Add(teamNameModel.TeamName);
-        message = "登録しました";
-        messageClass = "alert-success";
+        // Content Safetyで検証
+        var validationResult = await SafetyService.ValidateAsync(teamNameModel.TeamName);
         
-        // フォームをリセット
-        teamNameModel = new();
+        if (validationResult.IsValid)
+        {
+            // 登録成功
+            registeredTeams.Add(teamNameModel.TeamName);
+            message = validationResult.Message;
+            messageClass = "alert-success";
+            categoriesSummary = string.Empty;
+            
+            // フォームをリセット
+            teamNameModel = new();
+        }
+        else
+        {
+            // 登録失敗
+            message = validationResult.Message;
+            messageClass = "alert-danger";
+            categoriesSummary = validationResult.GetCategoriesSummary();
+        }
     }
 }
