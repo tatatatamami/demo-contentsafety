@@ -19,18 +19,12 @@ if (!string.IsNullOrEmpty(endpoint) && !string.IsNullOrEmpty(key))
         new Uri(endpoint),
         new AzureKeyCredential(key)
     ));
-    builder.Services.AddScoped<TeamNameSafetyService>();
+    builder.Services.AddScoped<ITeamNameSafetyService, TeamNameSafetyService>();
 }
 else
 {
-    // Fallback: Content Safety未設定の場合でも動作させる（常に通過）
-    builder.Services.AddScoped<TeamNameSafetyService>(sp =>
-    {
-        var logger = sp.GetRequiredService<ILogger<TeamNameSafetyService>>();
-        logger.LogWarning("Azure Content Safety is not configured. Validation will be bypassed.");
-        // nullを渡すことでバリデーションをスキップさせる実装にする
-        return new TeamNameSafetyService(null!, logger);
-    });
+    // Fallback: Content Safety未設定の場合は NoOp サービスを使用
+    builder.Services.AddScoped<ITeamNameSafetyService, NoOpTeamNameSafetyService>();
 }
 
 var app = builder.Build();

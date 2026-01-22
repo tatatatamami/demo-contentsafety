@@ -3,7 +3,7 @@ using Azure.AI.ContentSafety;
 
 namespace DemoContentSafety.Services;
 
-public class TeamNameSafetyService
+public class TeamNameSafetyService : ITeamNameSafetyService
 {
     private readonly ContentSafetyClient _client;
     private readonly ILogger<TeamNameSafetyService> _logger;
@@ -19,17 +19,6 @@ public class TeamNameSafetyService
 
     public async Task<ValidationResult> ValidateAsync(string teamName)
     {
-        // Content Safety未設定の場合は常にOKとして扱う
-        if (_client == null)
-        {
-            _logger.LogWarning("Content Safety client is not configured. Skipping validation.");
-            return new ValidationResult
-            {
-                IsValid = true,
-                Message = "登録しました"
-            };
-        }
-
         try
         {
             var request = new AnalyzeTextOptions(teamName);
@@ -37,17 +26,43 @@ public class TeamNameSafetyService
             
             var result = response.Value;
             
-            // 各カテゴリの severity をチェック
-            var categories = new Dictionary<string, int>
+            // 各カテゴリの severity をチェックし、しきい値判定も同時に行う
+            var categories = new Dictionary<string, int>();
+            bool isValid = true;
+            
+            foreach (var category in result.CategoriesAnalysis)
             {
-                { "Hate", result.CategoriesAnalysis.FirstOrDefault(c => c.Category == TextCategory.Hate)?.Severity ?? 0 },
-                { "Sexual", result.CategoriesAnalysis.FirstOrDefault(c => c.Category == TextCategory.Sexual)?.Severity ?? 0 },
-                { "Violence", result.CategoriesAnalysis.FirstOrDefault(c => c.Category == TextCategory.Violence)?.Severity ?? 0 },
-                { "SelfHarm", result.CategoriesAnalysis.FirstOrDefault(c => c.Category == TextCategory.SelfHarm)?.Severity ?? 0 }
-            };
-
-            // いずれかのカテゴリがしきい値以上の場合はNG
-            bool isValid = categories.All(c => c.Value < SeverityThreshold);
+                string categoryName;
+                if (category.Category == TextCategory.Hate)
+                {
+                    categoryName = "Hate";
+                }
+                else if (category.Category == TextCategory.Sexual)
+                {
+                    categoryName = "Sexual";
+                }
+                else if (category.Category == TextCategory.Violence)
+                {
+                    categoryName = "Violence";
+                }
+                else if (category.Category == TextCategory.SelfHarm)
+                {
+                    categoryName = "SelfHarm";
+                }
+                else
+                {
+                    categoryName = category.Category.ToString();
+                }
+                
+                var severity = category.Severity ?? 0;
+                categories[categoryName] = severity;
+                
+                // しきい値チェック
+                if (severity >= SeverityThreshold)
+                {
+                    isValid = false;
+                }
+            }
 
             return new ValidationResult
             {
@@ -66,21 +81,6 @@ public class TeamNameSafetyService
                 IsValid = false,
                 Message = "判定に失敗しました。時間をおいて再試行してください"
             };
-        }
-    }
-
-    public class ValidationResult
-    {
-        public bool IsValid { get; set; }
-        public string Message { get; set; } = string.Empty;
-        public Dictionary<string, int> Categories { get; set; } = new();
-        
-        public string GetCategoriesSummary()
-        {
-            if (Categories.Count == 0)
-                return string.Empty;
-                
-            return string.Join(", ", Categories.Select(c => $"{c.Key}:{c.Value}"));
         }
     }
 }
